@@ -90,18 +90,21 @@ export default class GithubHandler {
       },
     );
   }
-  async loadTokenFromStorage(): Promise<string> {
-    return new Promise((resolve, reject) => {
-      chrome.storage.sync.get(['github_leetsync_token'], (result) => {
-        const token = result['github_leetsync_token'];
-        if (!token) {
-          console.log('No access token found.');
-          chrome.storage.sync.clear();
-          resolve('');
-        }
-        resolve(token);
-      });
+  // Promise wrapper around chrome.storage.sync.get to avoid racey callback usage
+  private storageGet<T = any>(keys: string | string[]): Promise<T> {
+    return new Promise((resolve) => {
+      chrome.storage.sync.get(keys, (result) => resolve(result));
     });
+  }
+  async loadTokenFromStorage(): Promise<string> {
+    const result = (await this.storageGet(['github_leetsync_token'])) as any;
+    const token = result && result['github_leetsync_token'];
+    if (!token) {
+      console.log('No access token found.');
+      chrome.storage.sync.clear();
+      return '';
+    }
+    return token;
   }
   async authorize(code: string): Promise<string | null> {
     const access_token = await this.fetchAccessToken(code);
@@ -297,6 +300,19 @@ export default class GithubHandler {
   async submit(
     submission: Submission, //todo: define the submission type
   ): Promise<boolean> {
+    // Ensure credentials are loaded from storage (constructor callback may not have run yet)
+    const creds = (await this.storageGet([
+      'github_leetsync_token',
+      'github_username',
+      'github_leetsync_repo',
+      'github_leetsync_subdirectory',
+    ])) as any;
+    this.accessToken = this.accessToken || creds['github_leetsync_token'] || '';
+    this.username = this.username || creds['github_username'] || '';
+    this.repo = this.repo || creds['github_leetsync_repo'] || '';
+    this.github_leetsync_subdirectory =
+      this.github_leetsync_subdirectory || creds['github_leetsync_subdirectory'] || '';
+
     if (!this.accessToken || !this.username || !this.repo) return false;
     const {
       code,
@@ -360,10 +376,9 @@ export default class GithubHandler {
       lastSolved: { slug: titleSlug, timestamp: todayTimestamp },
     });
 
-    //update the problems solved
-    const { problemsSolved } = (await chrome.storage.sync.get('problemsSolved')) ?? {
-      problemsSolved: [],
-    }; //{slug: {...info}}
+    // update the problems solved (use promise-based storageGet to avoid errors)
+    const problemsRes = (await this.storageGet(['problemsSolved'])) as any;
+    const problemsSolved = (problemsRes && problemsRes.problemsSolved) || {};
 
     chrome.storage.sync.set({
       problemsSolved: {
