@@ -8,6 +8,7 @@ LeetSync is a Chrome extension that enables you to sync your LeetCode problem su
 - [Installation](#installation)
 - [Get Started](#get-started)
 - [Usage](#usage)
+- [Migration Notes](#migration-notes)
 - [Contributing](#contributing)
 - [License](#license)
 
@@ -40,6 +41,18 @@ To use LeetSync, follow these steps:
 1. Solve a problem on LeetCode and submit your solution.
 2. LeetSync will create a new file or update an existing one in your selected repository automatically.
 3. Go and check the submission on your github repository
+
+## Migration Notes
+
+### Storage Updates (v0.2.0+)
+
+If you're upgrading from an older version of LeetSync, please note the following storage key changes:
+
+- **`lastSubmissionIds`** (new): A map of question slugs to submission IDs used to prevent duplicate uploads. This replaces the previous timestamp-based deduplication logic and is more reliable.
+  - Structure: `{ [questionSlug]: submissionId, ... }`
+  - **What to do**: This key will be automatically created when you submit your next problem. No manual action needed.
+
+These changes improve submission tracking and prevent duplicate uploads when you submit multiple solutions to the same problem. If you experience issues with submissions not syncing, please check the extension console for detailed error messages about GitHub API failures (token expiration, insufficient permissions, etc.).
 
 ## Support
 
