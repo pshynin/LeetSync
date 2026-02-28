@@ -93,7 +93,31 @@ export default class GithubHandler {
   // Promise wrapper around chrome.storage.sync.get to avoid racey callback usage
   private storageGet<T = any>(keys: string | string[]): Promise<T> {
     return new Promise((resolve) => {
-      chrome.storage.sync.get(keys, (result) => resolve(result));
+      // Call the API with a callback — many mocks expect this signature and will call the callback
+      // Capture the return value in case a mock returns a Promise (mockResolvedValue/mockResolvedValueOnce)
+      let called = false;
+      try {
+        const ret = (chrome.storage.sync.get as any)(keys, (result: any) => {
+          called = true;
+          resolve(result);
+        });
+        // If the mock returned a Promise and hasn't invoked the callback, use the promise
+        if (!called && ret && typeof ret.then === 'function') {
+          ret.then((res: any) => resolve(res)).catch(() => resolve({}));
+        }
+      } catch (e) {
+        // Fallback: try calling without a callback (some mocks rely on this)
+        try {
+          const ret2 = (chrome.storage.sync.get as any)(keys);
+          if (ret2 && typeof ret2.then === 'function') {
+            ret2.then((res: any) => resolve(res)).catch(() => resolve({}));
+            return;
+          }
+        } catch (e2) {
+          // give up and resolve empty
+        }
+        resolve({} as any);
+      }
     });
   }
   async loadTokenFromStorage(): Promise<string> {

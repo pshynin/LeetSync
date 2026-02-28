@@ -43,9 +43,10 @@ describe('Submission Deduplication', () => {
       // This represents the dedup check logic from leetcode.ts
       const stored = (await mockChromeSyncGet(['lastSubmissionIds'])) as any;
       const lastSubmissionIds = stored?.lastSubmissionIds || {};
-      const isDuplicate =
+      const isDuplicate = !!(
         lastSubmissionIds[questionSlug] &&
-        lastSubmissionIds[questionSlug] === submissionId;
+        lastSubmissionIds[questionSlug] === submissionId
+      );
 
       expect(isDuplicate).toBe(true);
       expect(mockChromeSyncSet).not.toHaveBeenCalled();
@@ -64,9 +65,10 @@ describe('Submission Deduplication', () => {
 
       const stored = (await mockChromeSyncGet(['lastSubmissionIds'])) as any;
       const lastSubmissionIds = stored?.lastSubmissionIds || {};
-      const isDuplicate =
+      const isDuplicate = !!(
         lastSubmissionIds[questionSlug] &&
-        lastSubmissionIds[questionSlug] === newSubmissionId;
+        lastSubmissionIds[questionSlug] === newSubmissionId
+      );
 
       expect(isDuplicate).toBe(false);
     });
@@ -81,9 +83,10 @@ describe('Submission Deduplication', () => {
 
       const stored = (await mockChromeSyncGet(['lastSubmissionIds'])) as any;
       const lastSubmissionIds = stored?.lastSubmissionIds || {};
-      const isDuplicate =
+      const isDuplicate = !!(
         lastSubmissionIds[questionSlug] &&
-        lastSubmissionIds[questionSlug] === submissionId;
+        lastSubmissionIds[questionSlug] === submissionId
+      );
 
       expect(isDuplicate).toBe(false);
     });
@@ -96,9 +99,10 @@ describe('Submission Deduplication', () => {
 
       const stored = (await mockChromeSyncGet(['lastSubmissionIds'])) as any;
       const lastSubmissionIds = stored?.lastSubmissionIds || {};
-      const isDuplicate =
+      const isDuplicate = !!(
         lastSubmissionIds[questionSlug] &&
-        lastSubmissionIds[questionSlug] === submissionId;
+        lastSubmissionIds[questionSlug] === submissionId
+      );
 
       expect(isDuplicate).toBe(false);
     });
@@ -230,9 +234,10 @@ describe('Submission Deduplication', () => {
 
       const stored = (await mockChromeSyncGet(['lastSubmissionIds'])) as any;
       const lastSubmissionIds = stored?.lastSubmissionIds || {};
-      const isDuplicate =
+      const isDuplicate = !!(
         lastSubmissionIds[questionSlug] &&
-        lastSubmissionIds[questionSlug] === submissionId;
+        lastSubmissionIds[questionSlug] === submissionId
+      );
 
       expect(isDuplicate).toBe(false);
 
@@ -254,9 +259,10 @@ describe('Submission Deduplication', () => {
 
       const stored = (await mockChromeSyncGet(['lastSubmissionIds'])) as any;
       const lastSubmissionIds = stored?.lastSubmissionIds || {};
-      const isDuplicate =
+      const isDuplicate = !!(
         lastSubmissionIds[questionSlug] &&
-        lastSubmissionIds[questionSlug] === submissionId;
+        lastSubmissionIds[questionSlug] === submissionId
+      );
 
       expect(isDuplicate).toBe(true);
       // Should return early without calling chromeSyncSet
@@ -274,9 +280,10 @@ describe('Submission Deduplication', () => {
 
       const stored = (await mockChromeSyncGet(['lastSubmissionIds'])) as any;
       const lastSubmissionIds = stored?.lastSubmissionIds || {};
-      const isDuplicate =
+      const isDuplicate = !!(
         lastSubmissionIds[questionSlug] &&
-        lastSubmissionIds[questionSlug] === submissionId2;
+        lastSubmissionIds[questionSlug] === submissionId2
+      );
 
       expect(isDuplicate).toBe(false);
       // Should proceed with upload

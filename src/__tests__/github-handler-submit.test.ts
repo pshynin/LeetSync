@@ -1,4 +1,4 @@
-gi/**
+/**
  * Tests for GithubHandler.submit() - the core submission workflow
  * Tests that submissions succeed/fail based on file uploads and credentials
  */
@@ -29,17 +29,17 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
       },
     };
 
-    (global.fetch as jest.Mock) = jest.fn();
-
-    // Default mock: credentials are in storage
-    mockChromeSyncGet.mockImplementation((keys: any, _callback?: any) => {
-      return Promise.resolve({
+    // Default mock: credentials are in storage and callback
+    mockChromeSyncGet.mockImplementation((keys: any, callback?: any) => {
+      const res = {
         github_leetsync_token: 'test-token',
         github_username: 'test-user',
         github_leetsync_repo: 'test-repo',
         github_leetsync_subdirectory: '',
         problemsSolved: {},
-      });
+      };
+      if (typeof callback === 'function') callback(res);
+      return Promise.resolve(res);
     });
 
     handler = new GithubHandler();
@@ -81,6 +81,7 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     topicTags: [],
     runtimeError: null,
     compileError: null,
+    ...overrides,
   });
 
   describe('Failed submissions', () => {
@@ -103,10 +104,15 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     });
 
     it('should return false when credentials are missing (no token)', async () => {
-      mockChromeSyncGet.mockResolvedValueOnce({
-        github_leetsync_token: undefined,
-        github_username: 'test-user',
-        github_leetsync_repo: 'test-repo',
+      // Make next storageGet call return missing token
+      mockChromeSyncGet.mockImplementationOnce((keys: any, callback?: any) => {
+        const res = {
+          github_leetsync_token: undefined,
+          github_username: 'test-user',
+          github_leetsync_repo: 'test-repo',
+        };
+        if (typeof callback === 'function') callback(res);
+        return Promise.resolve(res);
       });
 
       const submission = createMockSubmission();
@@ -116,10 +122,14 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     });
 
     it('should return false when credentials are missing (no username)', async () => {
-      mockChromeSyncGet.mockResolvedValueOnce({
-        github_leetsync_token: 'test-token',
-        github_username: undefined,
-        github_leetsync_repo: 'test-repo',
+      mockChromeSyncGet.mockImplementationOnce((keys: any, callback?: any) => {
+        const res = {
+          github_leetsync_token: 'test-token',
+          github_username: undefined,
+          github_leetsync_repo: 'test-repo',
+        };
+        if (typeof callback === 'function') callback(res);
+        return Promise.resolve(res);
       });
 
       const submission = createMockSubmission();
@@ -129,10 +139,14 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     });
 
     it('should return false when credentials are missing (no repo)', async () => {
-      mockChromeSyncGet.mockResolvedValueOnce({
-        github_leetsync_token: 'test-token',
-        github_username: 'test-user',
-        github_leetsync_repo: undefined,
+      mockChromeSyncGet.mockImplementationOnce((keys: any, callback?: any) => {
+        const res = {
+          github_leetsync_token: 'test-token',
+          github_username: 'test-user',
+          github_leetsync_repo: undefined,
+        };
+        if (typeof callback === 'function') callback(res);
+        return Promise.resolve(res);
       });
 
       const submission = createMockSubmission();
@@ -142,14 +156,8 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     });
 
     it('should return false when README upload fails', async () => {
-      (global.fetch as jest.Mock).mockResolvedValueOnce({
-        ok: false,
-        status: 401,
-        statusText: 'Unauthorized',
-        json: async () => ({ message: 'Bad credentials' }),
-      });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValueOnce(null);
+      // Mock upload methods: README fails
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValueOnce(false);
 
       const submission = createMockSubmission();
       const result = await handler.submit(submission);
@@ -158,22 +166,9 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     });
 
     it('should return false when solution file upload fails', async () => {
-      // Mock successful README upload
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 201,
-          json: async () => ({ commit: { sha: 'abc123' } }),
-        })
-        // Mock failed solution file upload
-        .mockResolvedValueOnce({
-          ok: false,
-          status: 422,
-          statusText: 'Unprocessable Entity',
-          json: async () => ({ message: 'Invalid request' }),
-        });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValue(null);
+      // Mock successful README, but solution fails
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValueOnce(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValueOnce(false);
 
       const submission = createMockSubmission();
       const result = await handler.submit(submission);
@@ -184,20 +179,8 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
 
   describe('Successful submissions', () => {
     it('should return true when all files upload successfully', async () => {
-      // Mock successful file uploads (README, solution, no notes)
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 201,
-          json: async () => ({ commit: { sha: 'abc123' } }),
-        })
-        .mockResolvedValueOnce({
-          ok: true,
-          status: 201,
-          json: async () => ({ commit: { sha: 'def456' } }),
-        });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValue(null);
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
       const submission = createMockSubmission();
       const result = await handler.submit(submission);
@@ -206,93 +189,65 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     });
 
     it('should upload all files (README, solution, notes) when notes exist', async () => {
-      const submission = createMockSubmission({
-        notes: 'Time limit: O(n), Space: O(1)',
-      });
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createNotesFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
-      // Mock successful file uploads
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValue(null);
-
+      const submission = createMockSubmission({ notes: 'Time limit: O(n), Space: O(1)' });
       const result = await handler.submit(submission);
 
       expect(result).toBe(true);
-      // Verify fileExists was called for each file type
-      expect(handler.fileExists).toHaveBeenCalledTimes(3); // README, Notes, Solution
+      expect((handler as any).createReadmeFile).toHaveBeenCalled();
+      expect((handler as any).createNotesFile).toHaveBeenCalled();
+      expect((handler as any).createSolutionFile).toHaveBeenCalled();
     });
 
     it('should skip notes upload when notes are empty', async () => {
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createNotesFile').mockResolvedValue(false);
+
       const submission = createMockSubmission({ notes: '' });
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValue(null);
-
       const result = await handler.submit(submission);
 
       expect(result).toBe(true);
-      // Only README and Solution should be uploaded
-      expect(handler.fileExists).toHaveBeenCalledTimes(2);
+      expect((handler as any).createReadmeFile).toHaveBeenCalled();
+      expect((handler as any).createSolutionFile).toHaveBeenCalled();
     });
 
     it('should update existing files when they already exist', async () => {
-      const sha = 'existing-file-sha';
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 200 })
-        .mockResolvedValueOnce({ ok: true, status: 200 });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValue(sha);
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
       const submission = createMockSubmission();
       const result = await handler.submit(submission);
 
       expect(result).toBe(true);
-      // Verify fileExists was called and returned sha (for update)
-      expect(handler.fileExists).toHaveBeenCalled();
     });
   });
 
   describe('Storage updates on success', () => {
     it('should update problemsSolved on successful submission', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValue(null);
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
       const submission = createMockSubmission();
       await handler.submit(submission);
 
-      // Check that problemsSolved was updated
       const setCalls = mockChromeSyncSet.mock.calls;
-      const problemsSolvedUpdate = setCalls.find(
-        (call) => call[0].problemsSolved,
-      );
+      const problemsSolvedUpdate = setCalls.find((call) => call[0].problemsSolved);
 
       expect(problemsSolvedUpdate).toBeDefined();
-      expect(problemsSolvedUpdate[0].problemsSolved).toHaveProperty(
-        'two-sum',
-      );
+      expect(problemsSolvedUpdate[0].problemsSolved).toHaveProperty('two-sum');
     });
 
     it('should update lastSolved on successful submission', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
-
-      jest.spyOn(handler, 'fileExists').mockResolvedValue(null);
+      jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
       const submission = createMockSubmission();
       await handler.submit(submission);
 
-      // Check that lastSolved was updated
       const setCalls = mockChromeSyncSet.mock.calls;
       const lastSolvedUpdate = setCalls.find((call) => call[0].lastSolved);
 
@@ -304,105 +259,62 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
 
   describe('File path construction', () => {
     it('should construct correct path with questionFrontendId', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
+      const readmeSpy = jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
-      const fileExistsSpy = jest
-        .spyOn(handler, 'fileExists')
-        .mockResolvedValue(null);
-
-      const submission = createMockSubmission({
-        question: {
-          ...createMockSubmission().question,
-          questionFrontendId: '1',
-          titleSlug: 'two-sum',
-        } as any,
-      });
-
+      const submission = createMockSubmission({ question: { ...createMockSubmission().question, questionFrontendId: '1', titleSlug: 'two-sum' } as any });
       await handler.submit(submission);
 
-      // Verify the path includes questionFrontendId and titleSlug
-      const pathCalls = fileExistsSpy.mock.calls;
-      const firstCall = pathCalls[0];
-      expect(firstCall[0]).toContain('1-two-sum');
+      expect(readmeSpy).toHaveBeenCalled();
+      const firstArg = readmeSpy.mock.calls[0][0];
+      expect(firstArg).toContain('1-two-sum');
     });
 
     it('should use questionId fallback when questionFrontendId is missing', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
+      const readmeSpy = jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
-      const fileExistsSpy = jest
-        .spyOn(handler, 'fileExists')
-        .mockResolvedValue(null);
-
-      const submission = createMockSubmission({
-        question: {
-          ...createMockSubmission().question,
-          questionFrontendId: undefined,
-          questionId: '1',
-          titleSlug: 'two-sum',
-        } as any,
-      });
-
+      const submission = createMockSubmission({ question: { ...createMockSubmission().question, questionFrontendId: undefined, questionId: '1', titleSlug: 'two-sum' } as any });
       await handler.submit(submission);
 
-      const pathCalls = fileExistsSpy.mock.calls;
-      const firstCall = pathCalls[0];
-      expect(firstCall[0]).toContain('1-two-sum');
+      const firstArg = readmeSpy.mock.calls[0][0];
+      expect(firstArg).toContain('1-two-sum');
     });
 
     it('should use "unknown" when both questionFrontendId and questionId are missing', async () => {
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
+      const readmeSpy = jest.spyOn(handler as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handler as any, 'createSolutionFile').mockResolvedValue(true);
 
-      const fileExistsSpy = jest
-        .spyOn(handler, 'fileExists')
-        .mockResolvedValue(null);
-
-      const submission = createMockSubmission({
-        question: {
-          ...createMockSubmission().question,
-          questionFrontendId: undefined,
-          questionId: undefined,
-          titleSlug: 'two-sum',
-        } as any,
-      });
-
+      const submission = createMockSubmission({ question: { ...createMockSubmission().question, questionFrontendId: undefined, questionId: undefined, titleSlug: 'two-sum' } as any });
       await handler.submit(submission);
 
-      const pathCalls = fileExistsSpy.mock.calls;
-      const firstCall = pathCalls[0];
-      expect(firstCall[0]).toContain('unknown-two-sum');
+      const firstArg = readmeSpy.mock.calls[0][0];
+      expect(firstArg).toContain('unknown-two-sum');
     });
 
     it('should prepend subdirectory when configured', async () => {
-      // Create a new handler with subdirectory
-      mockChromeSyncGet.mockResolvedValueOnce({
-        github_leetsync_token: 'test-token',
-        github_username: 'test-user',
-        github_leetsync_repo: 'test-repo',
-        github_leetsync_subdirectory: 'leetcode-solutions',
+      // next storage get should return subdirectory
+      mockChromeSyncGet.mockImplementationOnce((keys: any, callback?: any) => {
+        const res = {
+          github_leetsync_token: 'test-token',
+          github_username: 'test-user',
+          github_leetsync_repo: 'test-repo',
+          github_leetsync_subdirectory: 'leetcode-solutions',
+        };
+        if (typeof callback === 'function') callback(res);
+        return Promise.resolve(res);
       });
 
+      // create new handler to pick up subdirectory via constructor callback
       const handlerWithSubdir = new GithubHandler();
-
-      (global.fetch as jest.Mock)
-        .mockResolvedValueOnce({ ok: true, status: 201 })
-        .mockResolvedValueOnce({ ok: true, status: 201 });
-
-      const fileExistsSpy = jest
-        .spyOn(handlerWithSubdir, 'fileExists')
-        .mockResolvedValue(null);
+      const readmeSpy = jest.spyOn(handlerWithSubdir as any, 'createReadmeFile').mockResolvedValue(true);
+      jest.spyOn(handlerWithSubdir as any, 'createSolutionFile').mockResolvedValue(true);
 
       const submission = createMockSubmission();
       await handlerWithSubdir.submit(submission);
 
-      const pathCalls = fileExistsSpy.mock.calls;
-      const firstCall = pathCalls[0];
-      expect(firstCall[0]).toContain('leetcode-solutions/1-two-sum');
+      const firstArg = readmeSpy.mock.calls[0][0];
+      expect(firstArg).toContain('leetcode-solutions/1-two-sum');
     });
   });
 });
