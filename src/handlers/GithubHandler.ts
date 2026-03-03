@@ -90,16 +90,8 @@ export default class GithubHandler {
       },
     );
   }
-  // Promise wrapper around chrome.storage.sync.get for cleaner async/await usage
-  private storageGet<T = any>(keys: string | string[]): Promise<T> {
-    return new Promise((resolve) => {
-      chrome.storage.sync.get(keys, (result: any) => {
-        resolve(result);
-      });
-    });
-  }
   async loadTokenFromStorage(): Promise<string> {
-    const result = (await this.storageGet(['github_leetsync_token'])) as any;
+    const result = (await chrome.storage.sync.get(['github_leetsync_token'])) as any;
     const token = result && result['github_leetsync_token'];
     if (!token) {
       console.log('No access token found.');
@@ -341,7 +333,7 @@ export default class GithubHandler {
     submission: Submission, //todo: define the submission type
   ): Promise<boolean> {
     // Ensure credentials are loaded from storage (constructor callback may not have run yet)
-    const creds = (await this.storageGet([
+    const creds = (await chrome.storage.sync.get([
       'github_leetsync_token',
       'github_username',
       'github_leetsync_repo',
@@ -434,8 +426,8 @@ export default class GithubHandler {
       lastSolved: { slug: titleSlug, timestamp: todayTimestamp },
     });
 
-    // update the problems solved (use promise-based storageGet to avoid errors)
-    const problemsRes = (await this.storageGet(['problemsSolved'])) as any;
+    // update the problems solved
+    const problemsRes = (await chrome.storage.sync.get(['problemsSolved'])) as any;
     const problemsSolved = (problemsRes && problemsRes.problemsSolved) || {};
 
     chrome.storage.sync.set({
