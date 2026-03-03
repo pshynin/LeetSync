@@ -4,7 +4,7 @@ import { Submission } from '../types/Submission';
 class LeetCodeHandler {
   async getSubmission(
     questionSlug: string,
-  ): Promise<{ submissionDetails: Submission; id: number | string } | null> {
+  ): Promise<{ submissionDetails: Submission; id: number } | null> {
     const leetcode_session = (await chrome.storage.sync.get('leetcode_session'))?.[
       'leetcode_session'
     ];
