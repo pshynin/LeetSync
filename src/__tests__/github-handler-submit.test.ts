@@ -52,6 +52,7 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     memory: 24.2,
     memoryDisplay: '24.2 MB',
     memoryPercentile: 75.5,
+    memoryDistribution: { percentile: '75', value: 24.2 } as any,
     runtime: 45,
     runtimePercentile: 85.3,
     runtimeDisplay: '45 ms',
