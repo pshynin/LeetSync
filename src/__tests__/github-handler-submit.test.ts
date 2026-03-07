@@ -80,8 +80,8 @@ describe('GithubHandler.submit() - Submission Workflow', () => {
     user: {} as any,
     lastTestcase: '',
     topicTags: [],
-    runtimeError: null,
-    compileError: null,
+    runtimeError: undefined,
+    compileError: undefined,
     ...overrides,
   });
 
